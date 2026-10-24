@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+
+# Environment / secrets
+.env.*
+*.env
+!.env.example
+
+# Scrapling browser binaries
+.scrapling/
+playwright-browsers/
+
+# IDE / editors
+.vscode/
+.idea/
+*.iml
+
+# Kiro (keep specs, exclude secrets and runtime files)
+.kiro/kironomics_report.py
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Distribution / packaging
+*.tar.gz
+*.whl

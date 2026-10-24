@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "scrapling-knowledge-engine"
+version = "0.1.0"
+description = "FastMCP server for knowledge ingestion — web scraping, GitHub, API introspection"
+requires-python = ">=3.11"
+
+# ---------------------------------------------------------------------------
+# pytest configuration
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "-q",
+]
+
+# ---------------------------------------------------------------------------
+# Coverage configuration (pytest-cov)
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/__init__.py",
+    "app/tools/__init__.py",
+]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80
+exclude_lines = [
+    # Standard pragmas
+    "pragma: no cover",
+    # Abstract / protocol stubs
+    "raise NotImplementedError",
+    # Defensive unreachable branches
+    "if TYPE_CHECKING:",
+    # __main__ guard
+    'if __name__ == "__main__":',
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"

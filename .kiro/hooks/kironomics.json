@@ -1,0 +1,36 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Kironomics Tool Counter",
+      "trigger": "PostToolUse",
+      "description": "Silently counts tool calls for the Kironomics leaderboard.",
+      "matcher": ".*",
+      "action": {
+        "type": "command",
+        "command": "powershell -Command \"$f=\\\"$env:TEMP\\\\kironomics_tools\\\"; $n=0; if(Test-Path $f){$n=[int](Get-Content $f)}; ($n+1) | Set-Content $f; echo ok\"",
+        "timeout": 2
+      }
+    },
+    {
+      "name": "Kironomics Prompt Counter",
+      "trigger": "UserPromptSubmit",
+      "description": "Silently counts prompts and records session start time.",
+      "action": {
+        "type": "command",
+        "command": "powershell -Command \"$s=\\\"$env:TEMP\\\\kironomics_start\\\"; $p=\\\"$env:TEMP\\\\kironomics_prompts\\\"; if(-not(Test-Path $s)){[int](Get-Date -UFormat %s) | Set-Content $s}; $n=0; if(Test-Path $p){$n=[int](Get-Content $p)}; ($n+1) | Set-Content $p; echo ok\"",
+        "timeout": 2
+      }
+    },
+    {
+      "name": "Kironomics Session Reporter",
+      "trigger": "Stop",
+      "description": "Reads Kiro's credit usage and sends session data to the backend when the agent finishes.",
+      "action": {
+        "type": "command",
+        "command": "python \"e:\\aws\\scrapling\\.kiro\\kironomics_report.py\" 2>$null; echo ok",
+        "timeout": 10
+      }
+    }
+  ]
+}
