@@ -23,39 +23,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Checkout source code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Set up Python
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: requirements.txt
 
+      # Install project and test dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-mock
+          python -m pip install -r requirements.txt
+          python -m pip install requests curl_cffi
+          python -m pip install pytest pytest-cov pytest-mock
 
+      # Run tests with coverage
       - name: Run tests with coverage
         run: |
-          pytest tests/ \
+          python -m pytest tests/ \
             --cov=app \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-fail-under=80 \
             -v
 
+      # Upload coverage report even if tests fail
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
           path: coverage.xml
+          if-no-files-found: ignore
 
   # -----------------------------------------------------------------------
-  # Job 2: Build and push Docker image (only on push to main or tags)
+  # Job 2: Build and push Docker image
+  # Runs only after successful tests and not on pull requests
   # -----------------------------------------------------------------------
   build-and-push:
     name: Build & Push to GHCR
@@ -68,12 +77,15 @@ jobs:
       packages: write
 
     steps:
+      # Checkout source code
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Configure Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Authenticate with GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -81,21 +93,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Generate image tags and labels
       - name: Extract Docker metadata (tags and labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Tag :latest on every push to main
+            # Tag latest on pushes to the default branch
             type=raw,value=latest,enable={{is_default_branch}}
-            # Tag :sha-<short> on every push
+
+            # Short Git commit SHA
             type=sha,prefix=sha-,format=short
-            # Tag :v1.2.3 on version tags
+
+            # Semantic version tag: v1.2.3 -> 1.2.3
             type=semver,pattern={{version}}
-            # Tag :1.2 (major.minor) on version tags
+
+            # Major.minor tag: v1.2.3 -> 1.2
             type=semver,pattern={{major}}.{{minor}}
 
+      # Build and publish Docker image
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -103,7 +120,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Layer caching via GitHub Actions cache
+
+          # GitHub Actions layer caching
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+          # Target platform
           platforms: linux/amd64
