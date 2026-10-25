@@ -1,5 +1,8 @@
 fastmcp>=3.4.0
 scrapling>=0.3.0
+patchright
 duckduckgo_search>=7.0.0
 markdownify>=0.13.0
 uvicorn>=0.30.0
+requests
+curl_cffi
