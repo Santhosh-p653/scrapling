@@ -1,27 +1,30 @@
 """
 Tests for app/server.py.
 
-Covers:
-- MCP initialization and tool registration
-- Health-check route
-- Web search success and error handling
-- Standard Scrapling extraction
-- Stealth extraction
-- Batch extraction
-- Error handling and result truncation
+Coverage targets:
+  - MCP initialization and tool registration
+  - Health-check route
+  - Web search success and error handling
+  - Standard Scrapling extraction
+  - Stealth extraction
+  - Batch extraction
+  - Error handling and content truncation
+
+External services are mocked; these tests do not require live web requests.
 """
 
+import asyncio
+import json
 from unittest.mock import MagicMock, patch
 
-import pytest
 from starlette.requests import Request
 
 import app.server as server
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # Helpers
-# ---------------------------------------------------------------------------
+# ===========================================================================
 
 def make_page(
     title="Test Page",
@@ -29,6 +32,7 @@ def make_page(
     article="<article><h1>Hello</h1><p>Test content</p></article>",
 ):
     """Create a mock Scrapling page."""
+
     page = MagicMock()
     page.status = status
 
@@ -41,7 +45,9 @@ def make_page(
             result.get.return_value = article
         elif selector == "main":
             result.get.return_value = None
-        elif selector in ("#content", "body"):
+        elif selector == "#content":
+            result.get.return_value = "<div>Fallback content</div>"
+        elif selector == "body":
             result.get.return_value = "<body>Fallback content</body>"
         else:
             result.get.return_value = None
@@ -53,7 +59,8 @@ def make_page(
 
 
 def make_request(path="/healthz"):
-    """Create a minimal Starlette request."""
+    """Create a minimal Starlette HTTP request."""
+
     return Request({
         "type": "http",
         "method": "GET",
@@ -77,7 +84,6 @@ class TestMCPInitialization:
         assert server.mcp is not None
 
     def test_expected_tools_are_registered(self):
-        """Verify the four expected tool functions exist."""
         assert callable(server.search_web)
         assert callable(server.fetch_page_knowledge)
         assert callable(server.fetch_stealth_knowledge)
@@ -89,13 +95,13 @@ class TestMCPInitialization:
 # ===========================================================================
 
 class TestHealthCheck:
-    @pytest.mark.asyncio
-    async def test_health_check_returns_healthy_status(self):
-        response = await server.health_check(make_request())
+    def test_health_check_returns_healthy_status(self):
+        response = asyncio.run(
+            server.health_check(make_request())
+        )
 
         assert response.status_code == 200
 
-        import json
         payload = json.loads(response.body)
 
         assert payload["status"] == "healthy"
@@ -103,12 +109,13 @@ class TestHealthCheck:
         assert payload["service"] == "scrapling-knowledge-engine"
         assert "timestamp" in payload
 
-    @pytest.mark.asyncio
-    async def test_health_check_timestamp_is_iso_formatted(self):
-        import json
+    def test_health_check_timestamp_is_iso_formatted(self):
         from datetime import datetime
 
-        response = await server.health_check(make_request())
+        response = asyncio.run(
+            server.health_check(make_request())
+        )
+
         payload = json.loads(response.body)
 
         timestamp = datetime.fromisoformat(
@@ -157,6 +164,7 @@ class TestSearchWeb:
         result = server.search_web("Scrapling", max_results=3)
 
         assert result == []
+
         mock_instance.text.assert_called_once_with(
             "Scrapling",
             max_results=3,
@@ -164,7 +172,9 @@ class TestSearchWeb:
 
     @patch("app.server.DDGS")
     def test_search_returns_error_when_provider_fails(self, mock_ddgs):
-        mock_ddgs.side_effect = RuntimeError("Search provider unavailable")
+        mock_ddgs.side_effect = RuntimeError(
+            "Search provider unavailable"
+        )
 
         result = server.search_web("test")
 
@@ -176,7 +186,10 @@ class TestSearchWeb:
     def test_search_handles_text_method_error(self, mock_ddgs):
         mock_instance = MagicMock()
         mock_ddgs.return_value.__enter__.return_value = mock_instance
-        mock_instance.text.side_effect = RuntimeError("Request failed")
+
+        mock_instance.text.side_effect = RuntimeError(
+            "Request failed"
+        )
 
         result = server.search_web("test")
 
@@ -205,7 +218,10 @@ class TestFetchPageKnowledge:
         assert result["char_count"] >= 0
         assert "error" not in result
 
-        mock_fetcher_class.assert_called_once_with(auto_match=False)
+        mock_fetcher_class.assert_called_once_with(
+            auto_match=False
+        )
+
         mock_fetcher.get.assert_called_once_with(
             "https://example.com",
             stealthy_headers=True,
@@ -215,7 +231,6 @@ class TestFetchPageKnowledge:
     def test_http_error_returns_error(self, mock_fetcher_class):
         mock_fetcher = MagicMock()
         mock_fetcher_class.return_value = mock_fetcher
-
         mock_fetcher.get.return_value = make_page(status=403)
 
         result = server.fetch_page_knowledge(
@@ -242,7 +257,10 @@ class TestFetchPageKnowledge:
     def test_fetch_exception_returns_error(self, mock_fetcher_class):
         mock_fetcher = MagicMock()
         mock_fetcher_class.return_value = mock_fetcher
-        mock_fetcher.get.side_effect = RuntimeError("Connection failed")
+
+        mock_fetcher.get.side_effect = RuntimeError(
+            "Connection failed"
+        )
 
         result = server.fetch_page_knowledge(
             "https://example.com"
@@ -257,8 +275,13 @@ class TestFetchPageKnowledge:
         mock_fetcher_class.return_value = mock_fetcher
 
         page = make_page(
-            article="<article><p>" + ("A" * 1000) + "</p></article>"
+            article=(
+                "<article><p>"
+                + ("A" * 1000)
+                + "</p></article>"
+            )
         )
+
         mock_fetcher.get.return_value = page
 
         result = server.fetch_page_knowledge(
@@ -267,7 +290,10 @@ class TestFetchPageKnowledge:
         )
 
         assert len(result["content"]) > 100
-        assert "[... Truncated to fit token budget" in result["content"]
+        assert (
+            "[... Truncated to fit token budget"
+            in result["content"]
+        )
 
     @patch("app.server.Fetcher")
     def test_missing_title_uses_default(self, mock_fetcher_class):
@@ -275,7 +301,23 @@ class TestFetchPageKnowledge:
         mock_fetcher_class.return_value = mock_fetcher
 
         page = make_page()
-        page.css.return_value.get.return_value = None
+        page.css.side_effect = None
+
+        def css_without_title(selector):
+            result = MagicMock()
+
+            if selector == "title::text":
+                result.get.return_value = None
+            elif selector == "article":
+                result.get.return_value = (
+                    "<article><p>Content</p></article>"
+                )
+            else:
+                result.get.return_value = None
+
+            return result
+
+        page.css.side_effect = css_without_title
         mock_fetcher.get.return_value = page
 
         result = server.fetch_page_knowledge(
@@ -312,7 +354,9 @@ class TestFetchStealthKnowledge:
 
     @patch("app.server.StealthyFetcher.fetch")
     def test_stealth_exception_returns_error(self, mock_fetch):
-        mock_fetch.side_effect = RuntimeError("Browser launch failed")
+        mock_fetch.side_effect = RuntimeError(
+            "Browser launch failed"
+        )
 
         result = server.fetch_stealth_knowledge(
             "https://example.com"
@@ -324,7 +368,11 @@ class TestFetchStealthKnowledge:
     @patch("app.server.StealthyFetcher.fetch")
     def test_stealth_content_is_truncated(self, mock_fetch):
         mock_fetch.return_value = make_page(
-            article="<article><p>" + ("B" * 1000) + "</p></article>"
+            article=(
+                "<article><p>"
+                + ("B" * 1000)
+                + "</p></article>"
+            )
         )
 
         result = server.fetch_stealth_knowledge(
@@ -345,6 +393,7 @@ class TestBatchKnowledgeExtract:
     def test_extracts_multiple_urls(self, mock_fetcher_class):
         mock_fetcher = MagicMock()
         mock_fetcher_class.return_value = mock_fetcher
+
         mock_fetcher.get.side_effect = [
             make_page(title="Page One"),
             make_page(title="Page Two"),
@@ -389,14 +438,16 @@ class TestBatchKnowledgeExtract:
             RuntimeError("Network failure"),
         ]
 
-        result = server.batch_knowledge_extract([
+        urls = [
             "https://example.com/good",
             "https://example.com/bad",
-        ])
+        ]
+
+        result = server.batch_knowledge_extract(urls)
 
         assert len(result) == 2
         assert result[0]["title"] == "Good Page"
-        assert result[1]["url"] == "https://example.com/bad"
+        assert result[1]["url"] == urls[1]
         assert "error" in result[1]
 
     @patch("app.server.Fetcher")
@@ -410,8 +461,13 @@ class TestBatchKnowledgeExtract:
     def test_truncates_summary_content(self, mock_fetcher_class):
         mock_fetcher = MagicMock()
         mock_fetcher_class.return_value = mock_fetcher
+
         mock_fetcher.get.return_value = make_page(
-            article="<article><p>" + ("C" * 3000) + "</p></article>"
+            article=(
+                "<article><p>"
+                + ("C" * 3000)
+                + "</p></article>"
+            )
         )
 
         result = server.batch_knowledge_extract([
