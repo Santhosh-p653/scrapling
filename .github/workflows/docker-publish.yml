@@ -46,13 +46,14 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install ".[test]"
 
-      # Verify scraping dependencies
+      # Verify dependency consistency and critical imports
       - name: Verify scraping dependencies
         run: |
+          python -m pip check
           python -c "from patchright.sync_api import Error; print('Patchright import OK')"
           python -c "from browserforge.headers import Browser, HeaderGenerator; print('BrowserForge import OK')"
+          python -c "from msgspec import Struct, Meta, convert, ValidationError; print('msgspec import OK')"
           python -c "from scrapling.fetchers import Fetcher, StealthyFetcher; print('Scrapling fetchers import OK')"
-          python -m pip check
 
       # Run tests with coverage
       - name: Run tests with coverage
@@ -97,7 +98,7 @@ jobs:
 
       # Configure Docker Buildx
       - name: Set up Docker Buildx
-      - uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3
 
       # Authenticate with GitHub Container Registry
       - name: Log in to GitHub Container Registry
