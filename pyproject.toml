@@ -12,6 +12,7 @@ dependencies = [
     "scrapling>=0.3.0",
     "patchright",
     "browserforge",
+    "msgspec",
     "duckduckgo_search>=7.0.0",
     "markdownify>=0.13.0",
     "uvicorn>=0.30.0",
@@ -56,9 +57,16 @@ show_missing = true
 skip_covered = false
 fail_under = 80
 exclude_lines = [
+    # Standard pragmas
     "pragma: no cover",
+
+    # Abstract/protocol stubs
     "raise NotImplementedError",
+
+    # Defensive unreachable branches
     "if TYPE_CHECKING:",
+
+    # Main guard
     'if __name__ == "__main__":',
 ]
 
