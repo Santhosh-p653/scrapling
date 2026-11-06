@@ -18,6 +18,10 @@ dependencies = [
     "uvicorn>=0.30.0",
     "requests",
     "curl_cffi",
+    "PyYAML>=6.0",
+    "pypdf>=4.0.0",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0.0",
 ]
 
 [project.optional-dependencies]

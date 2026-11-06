@@ -1,215 +1,165 @@
-# Scrapling MCP Server on AWS Lightsail
+# Scrapling Knowledge Engine — MCP Server
 
-> A high-performance web extraction MCP server that turns live web content into LLM-ready Markdown — deploy once, then plug it into your AI IDEs, agents, RAG pipelines, and automation workflows.
+> A FastMCP server that gives AI agents and IDEs a single endpoint for knowledge ingestion: web scraping, docs-site crawling, GitHub/repo ingestion, API introspection, PDF extraction, and context bundling — all returned as clean, LLM-ready data.
 
 [![AWS](https://img.shields.io/badge/AWS-Lightsail-orange?logo=amazon-aws)](https://aws.amazon.com/lightsail/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker)](https://www.docker.com/)
 [![Scrapling](https://img.shields.io/badge/Scrapling-Web%20Extraction-green)](https://scrapling.readthedocs.io/)
-[![M8ven Score](https://m8ven.ai/badge/mcp/santhosh-p653-aws-mcp-test-1c4592)](https://m8ven.ai/mcp/santhosh-p653-aws-mcp-test-1c4592?s=readme)
 
 ## Overview
 
-Modern AI applications increasingly need access to fresh, structured, external knowledge. Instead of implementing web scraping separately inside every RAG system or AI agent, this project exposes [Scrapling](https://scrapling.readthedocs.io/)'s web extraction capabilities through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
+Modern AI applications constantly need fresh, structured, external knowledge. Rather than reimplementing scraping, repo ingestion, and API discovery inside every RAG system or agent, this project exposes those capabilities through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
-Once deployed, any MCP-compatible AI client can connect to the server and use it as a reusable web data-ingestion component.
+The server started as a [Scrapling](https://scrapling.readthedocs.io/)-powered web extractor and has grown into a full **knowledge engine**: 18 tools spanning search, scraping, crawling, GitHub, API introspection, document extraction, and context assembly. It runs over `streamable-http` on port `8080` and plugs into any MCP-compatible client.
 
 ```
 ┌──────────────────────┐
 │   AI IDE / AI Agent   │
-│ Claude / MCP Client   │
+│  Kiro / MCP Client    │
 └──────────┬────────────┘
-           │ MCP
+           │ MCP (streamable-http :8080)
            ▼
-┌──────────────────────┐
-│   Scrapling MCP       │
-│      Server           │
-└──────────┬────────────┘
+┌──────────────────────────────────────┐
+│       Scrapling Knowledge Engine       │
+│  search · scrape · crawl · github ·    │
+│  api · pdf · context · manifest        │
+└──────────┬────────────────────────────┘
            ▼
-┌──────────────────────┐
-│        Web            │
-│  Dynamic / Static      │
-│     Content            │
-└──────────┬────────────┘
+   Web · Docs · GitHub · REST/GraphQL · PDFs
            ▼
-┌──────────────────────┐
-│      Markdown          │
-│   LLM-ready Data       │
-└──────────┬────────────┘
+     Clean Markdown / Structured JSON
            ▼
-┌─────────────────────────────────┐
-│ RAG / Embeddings / Vector DB /   │
-│ Knowledge Base / Agent Memory    │
-└─────────────────────────────────┘
+   RAG · Embeddings · Vector DB · Agent Memory
 ```
 
-## Why MCP for Web Extraction?
+## Tool Catalog (18 tools)
 
-Traditionally, every AI application that needs web data implements its own:
+The server is organized into five phases. Every tool returns a consistent `dict` or `list[dict]` shape with an `error` key on failure, and never crashes the server.
 
-- HTTP requests
-- HTML parsing
-- Browser automation
-- Dynamic page handling
-- Extraction logic
-- Retry mechanisms
-- Content normalization
+### Phase 0 — Core Scraping
 
-This creates duplicated infrastructure. With MCP, web extraction becomes a **shared capability**.
+| Tool | Description |
+|---|---|
+| `search_web` | Anonymous DuckDuckGo search → title + URL + snippet |
+| `fetch_page_knowledge` | Fast HTTP page fetch → clean LLM markdown |
+| `fetch_stealth_knowledge` | Headless browser fetch bypassing Cloudflare/Akamai |
+| `batch_knowledge_extract` | Batch fetch up to 5 URLs in one call |
 
-**Before** — multiple implementations:
+### Phase 1 — Repo & API Ingestion
 
-```
-RAG App        ──────► Scraper
-Agent          ──────► Scraper
-Research Tool  ──────► Scraper
-AI IDE         ──────► Scraper
-```
+| Tool | Description |
+|---|---|
+| `ingest_github_repo` | Full file tree + raw content for matched extensions (public & private via token) |
+| `fetch_github_file` | Fetch a single raw file from any repo (auto `main`→`master` fallback) |
+| `fetch_github_issues` | Issues with title, body, labels, comments (PRs skipped) |
+| `search_github_code` | GitHub code search with repo/language filters + content preview |
+| `fetch_openapi_spec` | Parse OpenAPI 3.x / Swagger 2.x (JSON or YAML) → summarised endpoint map |
+| `fetch_graphql_schema` | Introspection query → structured types, queries, mutations |
 
-**After** — one capability, multiple clients:
+### Phase 2 — Docs & Site Crawling
 
-```
-RAG App    ──┐
-Agent      ──┼──► Scrapling MCP Server
-AI IDE     ──┤
-Research   ──┘
-```
+| Tool | Description |
+|---|---|
+| `scrape_docs_site` | BFS crawl following internal links → clean markdown per page |
+| `scrape_sitemap` | Parse `sitemap.xml` (incl. index files) → batch-fetch pages as markdown |
+| `fetch_pdf_content` | Download a PDF → extract clean text via `pypdf` (handles encryption) |
 
-Deploy the server once and reuse it across MCP-compatible workflows.
+### Phase 3 — Context Management
 
-## Not Just a Web Scraper
+| Tool | Description |
+|---|---|
+| `detect_content_type` | Classify a URL (docs/repo/openapi/graphql/pdf/blog/generic) → suggested tool |
+| `summarize_for_context` | Compress content to a char budget, preserving headings + code blocks |
+| `build_context_bundle` | Multi-source ingest → chunk → rank by topic → single budgeted context block |
 
-The core idea behind this project is broader than scraping. For many LLM applications, external information eventually needs to become a representation that can be parsed, cleaned, structured, chunked, embedded, indexed, and retrieved.
+### Phase 4 — Live API & Tool Calling
 
-Markdown is particularly useful in this pipeline because it preserves useful document hierarchy:
+| Tool | Description |
+|---|---|
+| `call_rest_api` | Generic authenticated REST caller (any verb, bearer auth, JSON/text decode) |
+| `list_available_tools` | Self-describing manifest of all tools (name, schema, example) via introspection |
 
-```
-Web Page → Scrapling → Markdown
-                          ├── Heading
-                          ├── Subheading
-                          ├── Paragraph
-                          ├── List
-                          ├── Table
-                          └── Links
-                          │
-                          ▼
-                      Chunking → Embeddings → Vector Database → RAG / Agent
-```
+### Health Check
 
-This makes the MCP server useful as an **LLM data insertion/ingestion layer**, rather than only a scraping utility.
-
-## Features
-
-- MCP-compatible web extraction
-- Powered by Scrapling
-- Designed for AI agents and AI IDEs
-- Markdown-oriented output
-- Suitable for RAG ingestion pipelines
-- Containerized with Docker
-- Deployable on AWS Lightsail
-- Reusable across multiple AI applications
-- Separates data acquisition from the AI application itself
-- Can be integrated into agentic workflows
-
-## Architecture
-
-```
-                    Internet
-                       │
-                       ▼
-                ┌───────────────┐
-                │      Web       │
-                └───────┬───────┘
-                        ▼
-              ┌───────────────────┐
-              │     Scrapling      │
-              │  Extraction Layer  │
-              └─────────┬─────────┘
-                        ▼
-              ┌───────────────────┐
-              │    MCP Server      │
-              │   Tool Interface   │
-              └─────────┬─────────┘
-                        │
-                   MCP Protocol
-                        │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-       AI IDE         Agent          RAG
-          │             │             │
-          └─────────────┼─────────────┘
-                        ▼
-                Markdown / Data
-                        ▼
-              ┌────────────────────┐
-              │ LLM Data Pipeline   │
-              └──────────┬─────────┘
-                        ▼
-              ┌────────────────────┐
-              │  Embeddings / DB    │
-              └──────────┬─────────┘
-                        ▼
-                     LLM / RAG
-```
-
-## Technology Stack
-
-| Component        | Technology                  |
-|-------------------|------------------------------|
-| Web Extraction    | Scrapling                   |
-| Protocol          | Model Context Protocol (MCP)|
-| Language          | Python                      |
-| Containerization  | Docker                      |
-| Cloud             | AWS Lightsail                |
-| CI/CD             | GitHub Actions               |
-| Output            | Markdown / Structured Content|
-| AI Integration    | MCP-compatible clients       |
+| Endpoint | Description |
+|---|---|
+| `GET /healthz` | Health check for Lightsail / load balancers |
 
 ## Project Structure
 
 ```
 .
-├── src/
-│   └── ...
+├── app/
+│   ├── server.py              # FastMCP server — registers all 18 tools
+│   ├── __init__.py
+│   └── tools/
+│       ├── __init__.py
+│       ├── search.py          # search_web
+│       ├── scrape.py          # fetch_page_knowledge, fetch_stealth_knowledge, batch_knowledge_extract
+│       ├── github.py          # ingest_github_repo, fetch_github_file, fetch_github_issues, search_github_code
+│       ├── api.py             # fetch_openapi_spec, fetch_graphql_schema, call_rest_api
+│       ├── crawl.py           # scrape_docs_site, scrape_sitemap
+│       ├── documents.py       # fetch_pdf_content
+│       ├── context.py         # build_context_bundle, summarize_for_context, detect_content_type
+│       └── manifest.py        # list_available_tools
+├── tests/                     # pytest suite (mocked, offline)
+├── .github/workflows/         # CI: test + build/push to GHCR
 ├── Dockerfile
 ├── requirements.txt
-├── .dockerignore
-├── .gitignore
-├── docker-compose.yml
+├── pyproject.toml             # pytest + coverage config
 └── README.md
 ```
 
-> Adjust the structure above if your repository uses a different source layout.
+## Technology Stack
+
+| Component | Technology |
+|---|---|
+| Protocol | Model Context Protocol (MCP) via FastMCP |
+| Web Extraction | Scrapling (HTTP + stealth browser) |
+| HTML → Markdown | markdownify |
+| Search | duckduckgo_search |
+| API parsing | PyYAML (OpenAPI), requests (REST/GraphQL) |
+| Crawling | BeautifulSoup + lxml (sitemap parsing) |
+| Documents | pypdf |
+| Language | Python 3.11+ |
+| Containerization | Docker |
+| Cloud | AWS Lightsail |
+| CI/CD | GitHub Actions → GHCR |
 
 ## Running Locally
 
 **1. Clone the repository**
 
 ```bash
-git clone https://github.com/Santhosh-p653/aws-mcp-test.git
-cd aws-mcp-test
+git clone https://github.com/Santhosh-p653/scrapling.git
+cd scrapling
 ```
 
-**2. Install dependencies**
-
-Create and activate a virtual environment:
+**2. Create a virtual environment and install dependencies**
 
 ```bash
 python -m venv .venv
 
 # Linux / macOS
 source .venv/bin/activate
-
 # Windows
 .venv\Scripts\activate
+
+pip install -r requirements.txt
+
+# Download browser binaries for Scrapling stealth mode
+scrapling install
 ```
 
-Install dependencies:
+**3. Run the server**
 
 ```bash
-pip install -r requirements.txt
+python -m app.server
 ```
+
+The server starts on `http://0.0.0.0:8080` with the MCP endpoint at `/mcp` and a health check at `/healthz`.
 
 ## Run with Docker
 
@@ -224,280 +174,135 @@ Run the container:
 ```bash
 docker run -d \
   --name scrapling-mcp \
-  -p 8000:8000 \
+  -p 8080:8080 \
   scrapling-mcp
 ```
 
-Verify that the container is running:
+Check health:
 
 ```bash
-docker ps
+curl http://localhost:8080/healthz
 ```
+
+## Connecting to Kiro (or any MCP client)
+
+Add the server to your MCP config (`~/.kiro/settings/mcp.json` for user-level, or `.kiro/settings/mcp.json` for workspace-level):
+
+```json
+{
+  "mcpServers": {
+    "scrapling-mcp": {
+      "url": "http://localhost:8080/mcp",
+      "disabled": false
+    }
+  }
+}
+```
+
+Then start the server (`python -m app.server`) and the client will discover all 18 tools. Call `list_available_tools` from the client to get the full self-describing manifest.
+
+## Testing
+
+Tests are fully mocked and run offline (no live network needed).
+
+```bash
+pip install pytest pytest-cov pytest-mock
+pytest tests/ --cov=app --cov-report=term-missing
+```
+
+Coverage config and an 80% gate live in `pyproject.toml`.
+
+## CI/CD — GitHub Actions → GHCR
+
+`.github/workflows/docker-publish.yml` runs two jobs:
+
+1. **test** — installs deps, runs pytest with coverage (80% gate).
+2. **build-and-push** — on push to `main` or a `v*.*.*` tag, builds the image and pushes to GitHub Container Registry (`ghcr.io/<owner>/<repo>`) with `latest`, `sha-<short>`, and semver tags.
+
+Pull requests run tests only; images are published on merges and tags.
 
 ## Deploy to AWS Lightsail
 
-The project is designed to run as a containerized service on AWS Lightsail.
-
-**High-level deployment flow:**
-
 ```
-GitHub → Push → GitHub Actions → Build → Docker Image → Deploy → AWS Lightsail
-                                                                      │
-                                                                      ▼
-                                                          Scrapling MCP Server
-                                                                      │
-                                                                      ▼
-                                                      MCP-Compatible AI Clients
+GitHub → push → GitHub Actions → test → build → GHCR → Lightsail container service
+                                                              ▼
+                                                 Scrapling Knowledge Engine
+                                                              ▼
+                                                   MCP-compatible AI clients
 ```
 
-### Deployment Steps
+1. Create an AWS Lightsail container service.
+2. Point it at the image published to GHCR by CI (or build and push manually).
+3. Expose port `8080` and set the health check path to `/healthz`.
+4. Keep any secrets (e.g. `GITHUB_TOKEN` for private repo ingestion) in environment variables, never in the repo.
 
-1. **Create an AWS Lightsail container service** — from the AWS Console or AWS CLI.
-2. **Build the Docker image**
-   ```bash
-   docker build -t scrapling-mcp .
-   ```
-3. **Push/deploy the container** — configure the Lightsail container deployment using the image produced by your CI/CD workflow.
-4. **Configure environment variables** — keep credentials and deployment configuration outside the repository:
-   ```bash
-   AWS_REGION=
-   LIGHTSAIL_SERVICE=
-   CONTAINER_NAME=
-   ```
+## Example Agent Workflows
 
-> ⚠️ Never commit secrets or credentials to Git.
+**Research a topic across many sources in one call:**
 
-## GitHub Actions
-
-The repository can use GitHub Actions to automate deployment:
-
-```
-git push → GitHub Actions
-             ├── Checkout
-             ├── Configure AWS credentials
-             ├── Build container
-             ├── Push/deploy
-             └── Update Lightsail
+```python
+build_context_bundle(
+    sources=[
+        "https://github.com/pallets/flask",      # repo → ingest_github_repo
+        "https://flask.palletsprojects.com/",     # docs → scrape_docs_site
+        "flask blueprints best practices",        # bare string → search_web
+    ],
+    topic="flask blueprints and app factories",
+    max_tokens=4000,
+)
 ```
 
-Deployment then follows a simple workflow:
+**Discover and call an API:**
 
-```bash
-git add .
-git commit -m "update scraper"
-git push origin main
+```python
+spec = fetch_openapi_spec("https://api.example.com/openapi.json")
+# agent reads the endpoint map, then:
+call_rest_api(
+    url="https://api.example.com/v1/users",
+    method="POST",
+    body={"name": "Ada"},
+    auth_token="...",
+)
 ```
 
-After the workflow completes, the updated MCP server is deployed.
+**Let the agent auto-route an unknown URL:**
 
-## Using the MCP Server
-
-Once the server is deployed, connect its MCP endpoint to an MCP-compatible AI client:
-
-```
-AI Client → MCP → https://your-mcp-server.example.com → Scrapling → Web Content
+```python
+route = detect_content_type("https://example.com/paper.pdf")
+# → { "type": "pdf", "suggested_tool": "fetch_pdf_content", ... }
 ```
 
-The AI client can then invoke the exposed tools as part of its workflow — the server behaves like a plugin for AI applications, replacing custom scraping code inside every project:
+## Design Principles
 
-```
-AI Application
-      ├── RAG
-      ├── Agents
-      ├── Research
-      └── Automation
-             │
-             ▼
-        MCP Server → Scrapling
-```
-
-## RAG Integration
-
-A typical RAG pipeline can use this server as the ingestion layer:
-
-```
-Web Sources → Scrapling MCP → Markdown → Document Parser → Chunking
-    → Embeddings → Vector Store → Retriever → LLM
-```
-
-Possible downstream components include:
-
-- Qdrant
-- PostgreSQL + pgvector
-- Elasticsearch
-- OpenSearch
-- Chroma
-- FAISS
-- Custom knowledge stores
-
-The MCP server remains independent of the downstream storage layer.
-
-## Agentic Workflow
-
-The server can also become a tool available to an AI agent:
-
-```
-User → AI Agent
-         ├── Decide what information is required
-         ├── Call Scrapling MCP
-         ├── Extract relevant content
-         ├── Transform/use Markdown
-         ├── Store information
-         └── Generate final response
-```
-
-This allows the agent to dynamically acquire information instead of relying only on static training data or previously indexed documents.
-
-## Why Markdown?
-
-Markdown provides a useful intermediate representation for LLM pipelines because it preserves semantic structure.
-
-**Markdown:**
-
-```markdown
-# AWS Lambda
-
-## Overview
-AWS Lambda is a serverless compute service.
-
-## Features
-- Event-driven execution
-- Automatic scaling
-- Pay-per-use pricing
-
-## Architecture
-### Invocation
-Lambda functions can be invoked through multiple AWS services.
-```
-
-**Compared with raw HTML:**
-
-```html
-<div>
-    <h1>AWS Lambda</h1>
-    <div>
-        <h2>Overview</h2>
-        ...
-    </div>
-</div>
-```
-
-Markdown is generally easier to inspect, clean, chunk, process, store, and pass to LLM pipelines.
-
-The goal, therefore, is not simply to "scrape a webpage" — it is to **acquire external knowledge in a form that can naturally enter an LLM data pipeline**.
-
-## Use Cases
-
-| Use Case | Description |
-|---|---|
-| **RAG Systems** | Automatically acquire fresh web information before indexing it. |
-| **AI Research Agents** | Allow agents to retrieve and analyze information from live websites. |
-| **Knowledge Bases** | Build continuously updated knowledge repositories. |
-| **AI IDEs** | Give coding assistants an external web extraction capability through MCP. |
-| **Documentation Ingestion** | Convert online documentation into Markdown suitable for downstream processing. |
-| **Agentic Automation** | Use web extraction as one tool among many in an autonomous workflow. |
-
-## Performance-Oriented Design
-
-The architecture separates the web acquisition layer from the AI application.
-
-Instead of every AI application maintaining a custom scraper, the approach becomes:
-
-```
-                ┌───────────────┐
-                │ Scrapling MCP  │
-                └───────┬───────┘
-                        │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-        RAG          Agent          AI IDE
-```
-
-This allows scraping infrastructure to be deployed once and reused across multiple workflows.
+- **Consistent shapes** — every tool returns `dict`/`list[dict]` with an `error` key on failure.
+- **Never crashes** — all tools handle exceptions gracefully.
+- **No storage layer** — the server returns raw/cleaned content; embedding and indexing are the agent's job.
+- **No auth on the server itself** — handle authentication at the deployment/network level.
+- **Modular** — each tool category lives in its own module under `app/tools/`.
 
 ## Security Considerations
 
-When deploying the server publicly:
-
-- Do not expose AWS credentials in the container
-- Use HTTPS in production
-- Restrict network access where appropriate
-- Validate requested URLs
-- Apply rate limits where required
-- Monitor resource consumption
-- Avoid scraping websites in violation of their terms or applicable laws
-- Keep secrets in environment variables or a dedicated secrets manager
-
-## Production Recommendations
-
-For a production deployment, consider adding:
-
-- Authentication
-- API/MCP access control
-- HTTPS
-- Rate limiting
-- Request logging
-- Observability
-- Retry policies
-- Caching
-- URL allowlists
-- Resource limits
-- Health checks
-- Monitoring and alerting
+- Use HTTPS in production and restrict network access.
+- Validate/allowlist requested URLs where appropriate.
+- Keep tokens and secrets in environment variables or a secrets manager.
+- Apply rate limits and monitor resource consumption.
+- Respect target sites' terms of service and applicable laws.
 
 ## Future Improvements
 
-- [ ] Authentication for MCP clients
+- [ ] Authentication / access control for MCP clients
 - [ ] URL/domain allowlisting
 - [ ] Content caching
-- [ ] Distributed crawling
-- [ ] Queue-based ingestion
-- [ ] Automatic document chunking
-- [ ] Direct vector database integration
-- [ ] S3-based document storage
-- [ ] Crawl scheduling
+- [ ] Vector DB integration for persistent knowledge
+- [ ] Crawl scheduling and queue-based ingestion
 - [ ] Observability dashboard
-- [ ] Multi-user access control
-
-## Example End-to-End Workflow
-
-```
-User / Agent → MCP-Compatible IDE → Scrapling MCP Server → Website
-    → Markdown → Document Processing → Chunking → Embeddings
-    → Vector DB → Retriever → LLM → Final Response
-```
-
-## Repository
-
-GitHub: [github.com/Santhosh-p653/aws-mcp-test](https://github.com/Santhosh-p653/aws-mcp-test)
-
-## Technical Article
-
-The architecture, deployment, and motivation behind this project is documented on AWS Builder Center:
-
-[Supercharging Agentic AI with Fast Web Scraping using Scrapling, MCP, and AWS Lightsail](https://builder.aws.com/content/3IEgYoU99cYRY2pNQPXqDiqxuTB/ugmdu-supercharging-agentic-ai-with-fast-web-scraping-using-scrapling-mcp-and-aws-lightsail)
-
-## Contributing
-
-Contributions, ideas, improvements, and experiments are welcome. If you build something using this MCP server, feel free to open an issue or pull request and share the workflow.
 
 ## Author
 
-**Santhosh P**
-
-Building systems around:
-
-- AI Agents
-- RAG
-- MCP
-- Cloud Infrastructure
-- Web Data Pipelines
-- AI/ML
+**Santhosh P** — building around AI Agents, RAG, MCP, cloud infrastructure, and web data pipelines.
 
 GitHub: [@Santhosh-p653](https://github.com/Santhosh-p653)
 
 ---
 
-> **Key Idea:** Deploy the scraping capability once. Plug it into your AI workflows whenever you need fresh, structured web data.
->
-> Scrapling + MCP turns web extraction into a reusable infrastructure component for the modern LLM stack.
+> **Key Idea:** Deploy the knowledge engine once. Plug it into any AI workflow that needs fresh, structured external knowledge — web, docs, repos, APIs, or PDFs — all through one MCP endpoint.

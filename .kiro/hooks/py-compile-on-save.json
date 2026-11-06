@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Syntax check on save",
+      "trigger": "PostFileSave",
+      "description": "Byte-compiles the app/ and tests/ trees to catch syntax errors immediately. Uses only the stdlib (compileall), no extra dependencies.",
+      "matcher": "\\.py$",
+      "action": {
+        "type": "command",
+        "command": "python -m compileall -q app tests",
+        "timeout": 20
+      }
+    }
+  ]
+}

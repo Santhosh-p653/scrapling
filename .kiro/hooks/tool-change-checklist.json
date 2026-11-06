@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Tool change checklist",
+      "trigger": "PostFileSave",
+      "description": "When a tool module under app/tools changes, remind the agent to keep the MCP tool contract, registration, and tests in sync.",
+      "matcher": "app[\\\\/]tools[\\\\/].*\\.py$",
+      "action": {
+        "type": "agent",
+        "prompt": "A tool module under app/tools/ changed. Verify the MCP tool conventions still hold: (1) each public tool returns a dict or list[dict] and uses the {\"error\": ...} sentinel on failure, never raising; (2) any new tool is registered in app/server.py under the correct phase block; (3) the matching tests/test_<module>.py covers both success and error shapes with network I/O mocked. Point out anything missing."
+      }
+    }
+  ]
+}

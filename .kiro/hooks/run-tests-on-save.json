@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run tests on save",
+      "trigger": "PostFileSave",
+      "description": "Runs the matching pytest module when a Python file under app/ or tests/ is saved.",
+      "matcher": "(app|tests)[\\\\/].*\\.py$",
+      "action": {
+        "type": "command",
+        "command": "python -m pytest -q",
+        "timeout": 120
+      }
+    }
+  ]
+}
