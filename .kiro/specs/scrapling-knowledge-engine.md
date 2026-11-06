@@ -38,11 +38,36 @@ A FastMCP server that provides agents and IDEs with a unified toolkit for knowle
 | `fetch_openapi_spec` | Parses OpenAPI 3.x / Swagger 2.x JSON or YAML → summarised endpoint map |
 | `fetch_graphql_schema` | Runs introspection query → structured types, queries, mutations |
 
+### Phase 2 — Docs & Site Crawling ✅
+
+| Tool | Description |
+|---|---|
+| `scrape_docs_site` | BFS crawl of a docs site following internal links → clean markdown per page |
+| `scrape_sitemap` | Parses sitemap.xml (incl. index files) → batch-fetches pages as markdown |
+| `fetch_pdf_content` | Downloads a PDF and extracts clean text via pypdf (handles encryption) |
+
+### Phase 3 — Context Management ✅
+
+| Tool | Description |
+|---|---|
+| `detect_content_type` | Classifies a URL (docs/repo/openapi/graphql/pdf/blog/generic) → suggested tool |
+| `summarize_for_context` | Compresses content to a char budget, preserving headings + code blocks |
+| `build_context_bundle` | Orchestrates multi-source ingest → chunk → rank by topic → single budgeted block |
+
+### Phase 4 — Live API & Tool Calling ✅
+
+| Tool | Description |
+|---|---|
+| `call_rest_api` | Generic authenticated REST caller (any verb, bearer auth, JSON/text decode) |
+| `list_available_tools` | Self-describing manifest of all tools (name, schema, example) via introspection |
+
+> All planned phases (0–4) are implemented. The server exposes 18 tools total.
+
 ---
 
-## Planned Features
+## Detailed Tool Reference (archived planning notes)
 
-### Phase 2 — Docs & Site Crawling (Priority: High)
+### Phase 4 — Live API & Tool Calling
 
 #### `ingest_github_repo`
 - Input: `repo_url: str`, `branch: str = "main"`, `file_extensions: list[str] = [".py", ".md", ".ts", ".js"]`, `max_files: int = 50`

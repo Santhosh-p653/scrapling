@@ -279,10 +279,11 @@ class TestFetchGraphqlSchema:
 
     @patch("app.tools.api.requests.post")
     def test_json_decode_error(self, mock_post):
+        import json as _json
         resp = MagicMock()
         resp.status_code = 200
         resp.raise_for_status.return_value = None
-        resp.json.side_effect = ValueError("not JSON")
+        resp.json.side_effect = _json.JSONDecodeError("not JSON", "", 0)
         mock_post.return_value = resp
         result = fetch_graphql_schema("https://api.example.com/graphql")
         assert "error" in result

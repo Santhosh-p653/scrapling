@@ -529,3 +529,73 @@ def fetch_graphql_schema(
         "subscriptions": subscriptions,
         "types": user_types,
     }
+
+
+# ---------------------------------------------------------------------------
+# Tool: call_rest_api  (Phase 4)
+# ---------------------------------------------------------------------------
+
+def call_rest_api(
+    url: str,
+    method: str = "GET",
+    headers: dict | None = None,
+    body: dict | None = None,
+    auth_token: str | None = None,
+    timeout: int = 20,
+) -> dict:
+    """
+    Generic authenticated REST caller. Lets agents invoke any HTTP(S) API
+    after discovering it via fetch_openapi_spec.
+
+    Args:
+        url: Full request URL.
+        method: HTTP verb (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS).
+        headers: Optional request headers.
+        body: Optional JSON body (sent for methods that allow a payload).
+        auth_token: Optional bearer token; added as 'Authorization: Bearer <token>'.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        { status_code, ok, headers, response } on success
+        { error } on failure
+    """
+    method_upper = (method or "GET").upper()
+    allowed = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+    if method_upper not in allowed:
+        return {"error": f"Unsupported HTTP method: {method!r}. Allowed: {sorted(allowed)}"}
+
+    request_headers = dict(headers or {})
+    if auth_token:
+        request_headers["Authorization"] = f"Bearer {auth_token}"
+
+    # Only attach a JSON body for verbs that carry a payload
+    json_body = body if method_upper in {"POST", "PUT", "PATCH", "DELETE"} else None
+
+    try:
+        resp = requests.request(
+            method_upper,
+            url,
+            headers=request_headers,
+            json=json_body,
+            timeout=timeout,
+        )
+    except requests.RequestException as e:
+        return {"error": f"REST request failed: {str(e)}"}
+
+    # Try to decode JSON; fall back to text
+    response_payload = None
+    content_type = resp.headers.get("Content-Type", "")
+    if "json" in content_type.lower():
+        try:
+            response_payload = resp.json()
+        except ValueError:
+            response_payload = resp.text
+    else:
+        response_payload = resp.text
+
+    return {
+        "status_code": resp.status_code,
+        "ok": resp.ok,
+        "headers": dict(resp.headers),
+        "response": response_payload,
+    }

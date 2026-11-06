@@ -8,3 +8,11 @@ markdownify>=0.13.0
 uvicorn>=0.30.0
 requests
 curl_cffi
+
+# Phase 1 — Repo & API Ingestion
+PyYAML>=6.0
+
+# Phase 2 — Docs & Site Crawling
+pypdf>=4.0.0
+beautifulsoup4>=4.12
+lxml>=5.0.0
